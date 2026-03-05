@@ -3,10 +3,19 @@ import axios from 'axios';
 const DOMAIN = `https://${process.env.KINTONE_DOMAIN}.cybozu.com`;
 const APP_ID = Number(process.env.KINTONE_APP_ID);
 const API_TOKEN = process.env.KINTONE_API_TOKEN;
-const BASIC_USER = process.env.KINTONE_BASIC_USER;
-const BASIC_PASS = process.env.KINTONE_BASIC_PASS;
 
-const BASE_URL = `${DOMAIN}/k/v1`;
+const basicAuth = Buffer.from(
+  `${process.env.KINTONE_BASIC_USER}:${process.env.KINTONE_BASIC_PASS}`
+).toString('base64');
+
+const axiosInstance = axios.create({
+  baseURL: `${DOMAIN}/k/v1`,
+  headers: {
+    'X-Cybozu-API-Token': API_TOKEN,
+    'Content-Type': 'application/json',
+    'Authorization': `Basic ${basicAuth}`
+  }
+});
 
 function calculateAge(birthdateString) {
   const [year, month, day] = birthdateString.split('-').map(Number);
@@ -14,7 +23,6 @@ function calculateAge(birthdateString) {
   const birthdate = new Date(year, month - 1, day);
 
   let age = today.getFullYear() - birthdate.getFullYear();
-
   const thisYearBirthday = new Date(
     today.getFullYear(),
     birthdate.getMonth(),
@@ -25,19 +33,6 @@ function calculateAge(birthdateString) {
 
   return age;
 }
-
-const basicAuth = Buffer.from(
-  `${process.env.KINTONE_BASIC_USER}:${process.env.KINTONE_BASIC_PASS}`
-).toString('base64');
-
-const axiosInstance = axios.create({
-  baseURL: BASE_URL,
-  headers: {
-    'X-Cybozu-API-Token': API_TOKEN,
-    'Content-Type': 'application/json',
-    'Authorization': `Basic ${basicAuth}`
-  }
-});
 
 async function fetchRecords() {
   let allRecords = [];
@@ -66,20 +61,17 @@ async function updateRecords() {
   const records = await fetchRecords();
 
   const updates = records
-    .map(record => {
-      const birthdate = record['生年月日']?.value;
-      if (!birthdate) return null;
-
-      return {
-        id: record.$id.value,
-        record: {
-          年齢: { value: calculateAge(birthdate) }
+    .filter(r => r['生年月日']?.value)
+    .map(r => ({
+      id: r.$id.value,
+      record: {
+        年齢: {
+          value: calculateAge(r['生年月日'].value)
         }
-      };
-    })
-    .filter(Boolean);
+      }
+    }));
 
-  console.log("更新対象件数:", updates.length);
+  console.log("更新対象:", updates.length);
 
   for (let i = 0; i < updates.length; i += 100) {
     const batch = updates.slice(i, i + 100);
