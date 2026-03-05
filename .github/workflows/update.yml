@@ -1,0 +1,26 @@
+
+name: Daily Age Update
+
+on:
+  schedule:
+    - cron: '0 16 * * *'  # JST 1:00
+  workflow_dispatch:
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - run: npm install
+      - run: node update.js
+        env:
+          KINTONE_DOMAIN: ${{ secrets.KINTONE_DOMAIN }}
+          KINTONE_API_TOKEN: ${{ secrets.KINTONE_API_TOKEN }}
+          KINTONE_APP_ID: ${{ secrets.KINTONE_APP_ID }}
+          KINTONE_BASIC_USER: ${{ secrets.KINTONE_BASIC_USER }}
+          KINTONE_BASIC_PASS: ${{ secrets.KINTONE_BASIC_PASS }}
