@@ -26,12 +26,17 @@ function calculateAge(birthdateString) {
   return age;
 }
 
+const basicAuth = Buffer.from(
+  `${process.env.KINTONE_BASIC_USER}:${process.env.KINTONE_BASIC_PASS}`
+).toString('base64');
+
 const axiosInstance = axios.create({
   baseURL: BASE_URL,
   headers: {
     'X-Cybozu-API-Token': API_TOKEN,
-    'Content-Type': 'application/json'
-  },
+    'Content-Type': 'application/json',
+    'Authorization': `Basic ${basicAuth}`
+  }
 });
 
 async function fetchRecords() {
