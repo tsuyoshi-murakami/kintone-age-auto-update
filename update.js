@@ -32,10 +32,6 @@ const axiosInstance = axios.create({
     'X-Cybozu-API-Token': API_TOKEN,
     'Content-Type': 'application/json'
   },
-  auth: BASIC_USER && BASIC_PASS ? {
-    username: BASIC_USER,
-    password: BASIC_PASS
-  } : undefined
 });
 
 async function fetchRecords() {
