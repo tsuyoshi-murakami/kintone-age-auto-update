@@ -1,4 +1,4 @@
-const axios = require('axios');
+import axios from 'axios';
 
 const DOMAIN = process.env.KINTONE_DOMAIN;
 const APP_ID = process.env.KINTONE_APP_ID;
@@ -96,9 +96,7 @@ async function bulkUpdate(records) {
   }
 }
 
-(async () => {
-  console.log('🔁 年齢を更新中...');
-  const records = await fetchRecords();
-  await bulkUpdate(records);
-  console.log('🎉 更新完了');
-})();
+console.log('🔁 年齢を更新中...');
+const records = await fetchRecords();
+await bulkUpdate(records);
+console.log('🎉 更新完了');
