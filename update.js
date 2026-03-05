@@ -1,90 +1,104 @@
-import axios from 'axios';
+const axios = require('axios');
 
-const DOMAIN = `https://${process.env.KINTONE_DOMAIN}.cybozu.com`;
-const APP_ID = Number(process.env.KINTONE_APP_ID);
+const DOMAIN = process.env.KINTONE_DOMAIN;
+const APP_ID = process.env.KINTONE_APP_ID;
 const API_TOKEN = process.env.KINTONE_API_TOKEN;
+const BASIC_USER = process.env.KINTONE_BASIC_USER;
+const BASIC_PASS = process.env.KINTONE_BASIC_PASS;
 
-const basicAuth = Buffer.from(
-  `${process.env.KINTONE_BASIC_USER}:${process.env.KINTONE_BASIC_PASS}`
-).toString('base64');
-
-const axiosInstance = axios.create({
-  baseURL: `${DOMAIN}/k/v1`,
-  headers: {
-    'X-Cybozu-API-Token': API_TOKEN,
-    'Content-Type': 'application/json',
-    'Authorization': `Basic ${basicAuth}`
-  }
-});
-
-function calculateAge(birthdateString) {
-  const [year, month, day] = birthdateString.split('-').map(Number);
+function calculateAge(birthdateStr) {
+  const [year, month, day] = birthdateStr.split('-').map(Number);
   const today = new Date();
-  const birthdate = new Date(year, month - 1, day);
 
-  let age = today.getFullYear() - birthdate.getFullYear();
-  const thisYearBirthday = new Date(
-    today.getFullYear(),
-    birthdate.getMonth(),
-    birthdate.getDate()
-  );
+  let age = today.getFullYear() - year;
+  const birthdayThisYear = new Date(today.getFullYear(), month - 1, day);
 
-  if (today < thisYearBirthday) age--;
+  if (today < birthdayThisYear) age--;
 
   return age;
 }
 
 async function fetchRecords() {
-  let allRecords = [];
+  const records = [];
   let offset = 0;
+  const limit = 100;
 
   while (true) {
-    const resp = await axiosInstance.get('/records.json', {
-      params: {
-        app: APP_ID,
-        query: `limit 100 offset ${offset}`
-      }
-    });
-
-    const records = resp.data.records;
-    if (records.length === 0) break;
-
-    allRecords = allRecords.concat(records);
-    offset += 100;
-  }
-
-  console.log("取得件数:", allRecords.length);
-  return allRecords;
-}
-
-async function updateRecords() {
-  const records = await fetchRecords();
-
-  const updates = records
-    .filter(r => r['生年月日']?.value)
-    .map(r => ({
-      id: r.$id.value,
-      record: {
-        年齢: {
-          value: calculateAge(r['生年月日'].value)
+    const res = await axios.get(
+      `https://${DOMAIN}.cybozu.com/k/v1/records.json`,
+      {
+        headers: {
+          'X-Cybozu-API-Token': API_TOKEN
+        },
+        auth: {
+          username: BASIC_USER,
+          password: BASIC_PASS
+        },
+        params: {
+          app: APP_ID,
+          query: `生年月日 != "" limit ${limit} offset ${offset}`
         }
       }
-    }));
+    );
 
-  console.log("更新対象:", updates.length);
+    records.push(...res.data.records);
 
-  for (let i = 0; i < updates.length; i += 100) {
-    const batch = updates.slice(i, i + 100);
+    if (res.data.records.length < limit) break;
+    offset += limit;
+  }
 
-    await axiosInstance.put('/records.json', {
-      app: APP_ID,
-      records: batch
-    });
+  return records;
+}
 
-    console.log(`更新: ${i}〜${i + batch.length - 1}`);
+async function bulkUpdate(records) {
+  const limit = 100;
+
+  for (let i = 0; i < records.length; i += limit) {
+    const chunk = records.slice(i, i + limit);
+
+    const updates = chunk.map(record => {
+      const id = record.$id.value;
+      const birthDate = record['生年月日'].value;
+
+      if (!birthDate) return null;
+
+      const age = calculateAge(birthDate);
+
+      return {
+        id,
+        record: {
+          '年齢': { value: age }
+        }
+      };
+    }).filter(r => r !== null);
+
+    if (updates.length > 0) {
+      await axios.put(
+        `https://${DOMAIN}.cybozu.com/k/v1/records.json`,
+        {
+          app: APP_ID,
+          records: updates
+        },
+        {
+          headers: {
+            'X-Cybozu-API-Token': API_TOKEN,
+            'Content-Type': 'application/json'
+          },
+          auth: {
+            username: BASIC_USER,
+            password: BASIC_PASS
+          }
+        }
+      );
+
+      console.log(`✅ ${updates.length} 件更新`);
+    }
   }
 }
 
-updateRecords().catch(err => {
-  console.error("詳細エラー:", err.response?.data || err.message);
-});
+(async () => {
+  console.log('🔁 年齢を更新中...');
+  const records = await fetchRecords();
+  await bulkUpdate(records);
+  console.log('🎉 更新完了');
+})();
